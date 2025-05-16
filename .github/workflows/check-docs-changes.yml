@@ -1,0 +1,58 @@
+name: Check n8n Documentation Changes
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'
+  # Allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  check-for-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check n8n changelog
+        id: check-changes
+        run: |
+          # Get the n8n changelog
+          CHANGELOG=$(curl -s "https://docs.n8n.io/changelog/")
+          
+          # Create a simple hash of the content
+          CONTENT_HASH=$(echo "$CHANGELOG" | md5sum | cut -d' ' -f1)
+          echo "CONTENT_HASH=$CONTENT_HASH" >> $GITHUB_ENV
+          
+          # Check if we have a stored hash
+          if [ -f "last-hash.txt" ]; then
+            STORED_HASH=$(cat last-hash.txt)
+            echo "STORED_HASH=$STORED_HASH" >> $GITHUB_ENV
+            
+            if [ "$CONTENT_HASH" != "$STORED_HASH" ]; then
+              echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+            else
+              echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
+            fi
+          else
+            # First run, assume changes
+            echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+          fi
+      
+      - name: Create or update hash file
+        run: |
+          echo "${{ env.CONTENT_HASH }}" > last-hash.txt
+      
+      - name: Trigger n8n update if changes detected
+        if: env.CHANGES_DETECTED == 'true'
+        run: |
+          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -u ${{ secrets.N8N_WEBHOOK_USER }}:${{ secrets.N8N_WEBHOOK_SECRET }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "source": "github_change_detector",
+              "reason": "documentation_changes_detected"
+            }'
+      
+      - name: Commit updated hash file
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "Update documentation hash"
+          file_pattern: last-hash.txt
