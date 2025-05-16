@@ -1,0 +1,25 @@
+name: Update n8n Documentation
+
+on:
+  # Run once per week on Monday at 8:00 AM UTC
+  schedule:
+    - cron: '0 8 * * 1'
+  # Also allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  trigger-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger n8n Documentation Update
+        run: |
+          curl -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -u ${{ secrets.N8N_WEBHOOK_USER }}:${{ secrets.N8N_WEBHOOK_SECRET }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "source": "github_scheduled",
+              "reason": "weekly_update"
+            }'
+      
+      - name: Log completion
+        run: echo "Triggered n8n documentation update workflow"
